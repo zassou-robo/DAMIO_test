@@ -396,19 +396,19 @@ void DM3520::Receive()
 
     while (can_.read(msg)) {
 
-        printf(
-            "RX ID: 0x%03X DLC: %d DATA:",
-            msg.id,
-            msg.len
-        );
+        // printf(
+        //     "RX ID: 0x%03X DLC: %d DATA:",
+        //     msg.id,
+        //     msg.len
+        // );
 
-        for (int i = 0; i < msg.len; i++) {
-            printf(" %02X",
-                static_cast<uint8_t>(msg.data[i])
-            );
-        }
+        // for (int i = 0; i < msg.len; i++) {
+            // printf(" %02X",
+            //     static_cast<uint8_t>(msg.data[i])
+            // );
+        // }
 
-        printf("\r\n");
+        // printf("\r\n");
 
         for (uint8_t i = 0; i < MAX_MOTORS; i++) {
             DM3520* motor = instances_[i];
