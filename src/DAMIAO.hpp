@@ -1,3 +1,4 @@
+
 #ifndef DAMIAO_HPP
 #define DAMIAO_HPP
 
@@ -7,31 +8,28 @@
 class DM3520 {
 public:
 
-    // 制御モード
     enum class Mode : uint8_t {
         MIT = 1,
         POSITION_VELOCITY = 2,
         VELOCITY = 3
     };
 
-    // 各モーターのデータ変換範囲
     struct Range {
-    float position_max;
-    float velocity_max;
-    float torque_max;
+        float position_max;
+        float velocity_max;
+        float torque_max;
 
-    Range(
-        float p = 12.5f,
-        float v = 30.0f,
-        float t = 10.0f
-    )
-        : position_max(p),
-          velocity_max(v),
-          torque_max(t)
-    {}
+        Range(
+            float p = 12.5f,
+            float v = 30.0f,
+            float t = 10.0f
+        )
+            : position_max(p),
+              velocity_max(v),
+              torque_max(t)
+        {}
     };
 
-    // フィードバック
     struct Feedback {
         float position = 0.0f;
         float velocity = 0.0f;
@@ -45,17 +43,29 @@ public:
     };
 
     // コンストラクタ
-    // コンストラクタ
-    DM3520(uint8_t id, Mode mode);
-    DM3520(uint8_t id, Mode mode, Range range);
+    DM3520(
+        uint8_t id,
+        Mode mode,
+        Range range = Range{}
+    );
 
-    // CAN初期化（全モーター共通）
+    // CAN初期化
     static bool InitBus();
 
-    // モーター初期化・モード設定
+    // モーター初期化
     bool Init();
 
-    // 制御
+    // モーター有効・無効
+    bool EnableMotor();
+    bool DisableMotor();
+
+    // 制御モード
+    bool SetMode();
+
+    // Master ID設定
+    void SetMasterID(uint8_t master_id);
+
+    // 制御指令
     bool SendVelocity(float velocity);
 
     bool SendPosition(
@@ -71,31 +81,34 @@ public:
         float torque
     );
 
-    // トルク指令（MITモード）
     bool SendTorque(float torque);
 
     // フィードバック
     const Feedback& GetFeedback() const;
 
-    // CAN受信処理
     static void Receive();
 
     // モーター情報
     uint8_t GetID() const;
+    uint8_t GetMasterID() const;
     Mode GetMode() const;
 
 private:
-    bool EnableMotor();
 
-    static DM3520* instances_[16];
+    static constexpr uint8_t MAX_MOTORS = 16;
+
+    static DM3520* instances_[MAX_MOTORS];
+
+    static CAN can_;
+    static bool bus_initialized_;
+
     uint8_t id_;
+    uint8_t master_id_;
+
     Mode mode_;
     Range range_;
 
     Feedback feedback_;
-
-    static CAN can_;
-    static bool bus_initialized_;
 
     bool WriteCAN(
         uint16_t can_id,
@@ -103,7 +116,7 @@ private:
         uint8_t length
     );
 
-    bool SetMode();
+    bool ParseFeedback(const CANMessage& msg);
 
     static uint32_t FloatToUint(
         float value,
@@ -118,8 +131,6 @@ private:
         float max,
         uint8_t bits
     );
-
-    bool ParseFeedback(const CANMessage& msg);
 };
 
-#endif //DAMIAO_HPP
+#endif

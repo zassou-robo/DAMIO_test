@@ -6,7 +6,7 @@
 
 // CAN共通インスタンス
 // 現在使用しているCAN1のピン配置を維持
-CAN DM3520::can_(PA_11, PA_12, 1000000);
+CAN DM3520::can_(PB_12,PB_13, 1000000);
 
 bool DM3520::bus_initialized_ = false;
 
@@ -323,32 +323,41 @@ bool DM3520::SendTorque(float torque)
 // フィードバック解析
 bool DM3520::ParseFeedback(const CANMessage& msg)
 {
-    if (msg.len < 8) {
+    if (msg.len != 8) {
         return false;
     }
 
-    if (msg.id != master_id_) {
-        return false;
+    // Master IDが0の場合はByte0内のIDで識別
+    if (master_id_ == 0) {
+        uint8_t received_id = msg.data[0] & 0x0F;
+
+        if (received_id != id_) {
+            return false;
+        }
+    }
+    else {
+        if (msg.id != master_id_) {
+            return false;
+        }
     }
 
-    // data[1]上位4bit: エラー状態
-    feedback_.error =
-        (msg.data[1] >> 4) & 0x0F;
+    // エラー状態
+    feedback_.error = (msg.data[0] >> 4) & 0x0F;
 
-    // 位置16bit
+    // 位置 16bit
     uint16_t pos_int =
-        (static_cast<uint16_t>(msg.data[2]) << 8) |
-        msg.data[3];
+        (static_cast<uint16_t>(msg.data[1]) << 8) |
+        msg.data[2];
 
-    // 速度12bit
+    // 速度 12bit
     uint16_t vel_int =
-        (static_cast<uint16_t>(msg.data[4]) << 4) |
-        ((msg.data[5] >> 4) & 0x0F);
+        (static_cast<uint16_t>(msg.data[3]) << 4) |
+        (msg.data[4] >> 4);
 
-    // トルク12bit
+    // トルク 12bit
     uint16_t torque_int =
-        (static_cast<uint16_t>(msg.data[5] & 0x0F) << 8) |
-        msg.data[6];
+        (static_cast<uint16_t>(msg.data[4] & 0x0F) << 8) |
+        msg.data[5];
 
     feedback_.position = UintToFloat(
         pos_int,
@@ -371,8 +380,8 @@ bool DM3520::ParseFeedback(const CANMessage& msg)
         12
     );
 
-    // 温度
-    feedback_.mos_temperature = msg.data[7];
+    feedback_.mos_temperature = msg.data[6];
+    feedback_.motor_temperature = msg.data[7];
 
     feedback_.valid = true;
 
@@ -385,16 +394,23 @@ void DM3520::Receive()
 {
     CANMessage msg;
 
-    // 受信バッファ内の全メッセージを処理
     while (can_.read(msg)) {
 
-        if (msg.len < 8) {
-            continue;
+        printf(
+            "RX ID: 0x%03X DLC: %d DATA:",
+            msg.id,
+            msg.len
+        );
+
+        for (int i = 0; i < msg.len; i++) {
+            printf(" %02X",
+                static_cast<uint8_t>(msg.data[i])
+            );
         }
 
-        // 登録されたモーターを検索
-        for (uint8_t i = 0; i < MAX_MOTORS; i++) {
+        printf("\r\n");
 
+        for (uint8_t i = 0; i < MAX_MOTORS; i++) {
             DM3520* motor = instances_[i];
 
             if (motor == nullptr) {
