@@ -1,38 +1,86 @@
 #include "mbed.h"
 #include "DAMIAO.hpp"
 
-DM3520::Range motor_range = {12.5f,30.0f,10.0f};
+// モーター設定
+DM3520::Range motor_range = {
+    12.5f,  // Position Max
+    30.0f,  // Velocity Max
+    10.0f   // Torque Max
+};
 
-DM3520 motor1(1,DM3520::Mode::VELOCITY,motor_range);
+DM3520 motor(
+    1,
+    DM3520::Mode::VELOCITY,
+    motor_range
+);
 
 int main()
 {
-    printf("Program start\r\n");
+    printf("===== DM3520 Auto Recovery Test =====\r\n");
 
-    printf("CAN Init: %s\r\n",DM3520::InitBus() ? "OK" : "NG");
-
-    bool init_ok = motor1.Init();
-
-    printf(
-        "Motor Init: %s\r\n",
-        init_ok ? "OK" : "NG"
-    );
-
-    if (!init_ok) {
+    // CAN初期化
+    if (!DM3520::InitBus()) {
+        printf("CAN Init: Failed\r\n");
         while (true) {
-            ThisThread::sleep_for(1s);
+            ThisThread::sleep_for(1000ms);
+        }
+    }
+    printf("CAN Init: OK\r\n");
+
+    // 初回のモード設定とEnable
+    if (!motor.Init()) {
+        printf("Motor Init: Failed\r\n");
+        while (true) {
+            ThisThread::sleep_for(1000ms);
         }
     }
 
+    printf("Motor Init: OK\r\n");
+    printf("Automatic recovery: ENABLED\r\n");
+    printf("Velocity command: DISABLED\r\n");
+
+    // フィードバックが500ms途絶えたら復旧処理を開始
+    Timer feedback_timeout;
+    Timer retry_interval;
+    feedback_timeout.start();
+    retry_interval.start();
+
+    bool recovery_attempted = false;
+
     while (true) {
+        // 受信できたフレームが対象モーターのフィードバックなら監視時間を更新
+        if (DM3520::Receive()) {
+            feedback_timeout.reset();
+            recovery_attempted = false;
+        }
 
-        // 受信処理
-        DM3520::Receive();
+        const bool feedback_lost =
+            feedback_timeout.elapsed_time() >= 500ms;
 
-        // 速度指令
-        bool send_ok = motor1.SendVelocity(0.5f);
-        const auto& fb = motor1.GetFeedback();
-        printf("Send:%d Pos:%.3f Vel:%.3f Torque:%.3f Error:%u Valid:%d\r\n",send_ok,fb.position,fb.velocity,fb.torque,fb.error,fb.valid);
+        const bool retry_ready =
+            !recovery_attempted || retry_interval.elapsed_time() >= 1000ms;
+
+        if (feedback_lost && retry_ready) {
+            printf("\r\n[RECOVERY] Feedback timeout\r\n");
+
+            // CANリセット + 1Mbps再設定
+            if (!DM3520::RecoverBus()) {
+                printf("[RECOVERY] CAN recovery failed\r\n");
+            } else {
+                ThisThread::sleep_for(10ms);
+
+                // Enableのみ送信。速度指令は送らない
+                if (motor.EnableMotor()) {
+                    printf("[RECOVERY] Enable: Send OK\r\n");
+                } else {
+                    printf("[RECOVERY] Enable: Send Failed\r\n");
+                }
+            }
+
+            recovery_attempted = true;
+            retry_interval.reset();
+        }
+
         ThisThread::sleep_for(10ms);
     }
 }

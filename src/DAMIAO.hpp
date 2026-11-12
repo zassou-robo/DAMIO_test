@@ -86,12 +86,17 @@ public:
     // フィードバック
     const Feedback& GetFeedback() const;
 
-    static void Receive();
+    // CAN受信。対象モーターのフィードバックを解析できた場合true
+    static bool Receive();
+
+    // CANコントローラをリセットして通信速度を再設定
+    static bool RecoverBus();
 
     // モーター情報
     uint8_t GetID() const;
     uint8_t GetMasterID() const;
     Mode GetMode() const;
+    static void ResetBusForTest();
 
 private:
 

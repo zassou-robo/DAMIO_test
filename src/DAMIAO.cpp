@@ -390,38 +390,104 @@ bool DM3520::ParseFeedback(const CANMessage& msg)
 
 
 // CAN受信処理
-void DM3520::Receive()
+// void DM3520::Receive()
+// {
+//     CANMessage msg;
+
+//     while (can_.read(msg)) {
+
+//         // printf(
+//         //     "RX ID: 0x%03X DLC: %d DATA:",
+//         //     msg.id,
+//         //     msg.len
+//         // );
+
+//         // for (int i = 0; i < msg.len; i++) {
+//             // printf(" %02X",
+//             //     static_cast<uint8_t>(msg.data[i])
+//             // );
+//         // }
+
+//         // printf("\r\n");
+
+//         for (uint8_t i = 0; i < MAX_MOTORS; i++) {
+//             DM3520* motor = instances_[i];
+
+//             if (motor == nullptr) {
+//                 continue;
+//             }
+
+//             if (motor->ParseFeedback(msg)) {
+//                 break;
+//             }
+//         }
+//     }
+// }
+// CAN受信処理
+// 対象モーターのフィードバックを1件以上解析できた場合true
+bool DM3520::Receive()
 {
+    bool feedback_received = false;
     CANMessage msg;
 
+    // 受信キューにあるフレームをすべて処理する
     while (can_.read(msg)) {
+        printf(
+            "RAW RX: ID=0x%03X DLC=%d\r\n",
+            msg.id,
+            msg.len
+        );
 
-        // printf(
-        //     "RX ID: 0x%03X DLC: %d DATA:",
-        //     msg.id,
-        //     msg.len
-        // );
-
-        // for (int i = 0; i < msg.len; i++) {
-            // printf(" %02X",
-            //     static_cast<uint8_t>(msg.data[i])
-            // );
-        // }
-
-        // printf("\r\n");
+        for (int i = 0; i < msg.len; i++) {
+            printf("%02X ", static_cast<uint8_t>(msg.data[i]));
+        }
+        printf("\r\n");
 
         for (uint8_t i = 0; i < MAX_MOTORS; i++) {
             DM3520* motor = instances_[i];
-
             if (motor == nullptr) {
                 continue;
             }
 
             if (motor->ParseFeedback(msg)) {
+                feedback_received = true;
                 break;
             }
         }
     }
+
+    return feedback_received;
+}
+
+
+// CANコントローラ復旧
+// reset後にCAN周波数を再設定する
+bool DM3520::RecoverBus()
+{
+    if (!bus_initialized_) {
+        return false;
+    }
+
+    printf("[CAN] Before reset: TXERR=%u RXERR=%u\r\n",
+           static_cast<unsigned>(can_.tderror()),
+           static_cast<unsigned>(can_.rderror()));
+
+    can_.reset();
+    can_.frequency(1000000);
+
+    printf("[CAN] After reset: TXERR=%u RXERR=%u\r\n",
+           static_cast<unsigned>(can_.tderror()),
+           static_cast<unsigned>(can_.rderror()));
+    printf("[CAN] Reset and 1Mbps reconfiguration completed\r\n");
+
+    return true;
+}
+
+
+// 旧テスト関数との互換性を維持
+void DM3520::ResetBusForTest()
+{
+    RecoverBus();
 }
 
 
@@ -451,3 +517,4 @@ DM3520::Mode DM3520::GetMode() const
 {
     return mode_;
 }
+
