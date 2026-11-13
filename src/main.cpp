@@ -7,17 +7,18 @@ DM3520::Range motor_range = {
     30.0f,  // Velocity Max
     10.0f   // Torque Max
 };
-
-DM3520 motor(
+DM3520 motor_1(
     1,
     DM3520::Mode::VELOCITY,
     motor_range
 );
-
+DM3520 motor_2(
+    2,
+    DM3520::Mode::VELOCITY,
+    motor_range
+);
 int main()
 {
-    printf("===== DM3520 Auto Recovery Test =====\r\n");
-
     // CAN初期化
     if (!DM3520::InitBus()) {
         printf("CAN Init: Failed\r\n");
@@ -28,8 +29,14 @@ int main()
     printf("CAN Init: OK\r\n");
 
     // 初回のモード設定とEnable
-    if (!motor.Init()) {
-        printf("Motor Init: Failed\r\n");
+    if (!motor_1.Init()) {
+        printf("Motor1 Init: Failed\r\n");
+        while (true) {
+            ThisThread::sleep_for(1000ms);
+        }
+    }
+    if (!motor_2.Init()) {
+        printf("Motor2 Init: Failed\r\n");
         while (true) {
             ThisThread::sleep_for(1000ms);
         }
@@ -70,11 +77,18 @@ int main()
                 ThisThread::sleep_for(10ms);
 
                 // Enableのみ送信。速度指令は送らない
-                if (motor.EnableMotor()) {
-                    printf("[RECOVERY] Enable: Send OK\r\n");
-                } else {
-                    printf("[RECOVERY] Enable: Send Failed\r\n");
-                }
+                // if (motor_1.EnableMotor()) {
+                //     printf("[RECOVERY] Enable: Send OK\r\n");
+                // } else {
+                //     printf("[RECOVERY] Enable: Send Failed\r\n");
+                // }
+                // if (motor_2.EnableMotor()) {
+                //     printf("[RECOVERY] Enable: Send OK\r\n");
+                // } else {
+                //     printf("[RECOVERY] Enable: Send Failed\r\n");
+                // }
+                motor_1.SendVelocity(5.0f);
+                motor_2.SendVelocity(5.0f);
             }
 
             recovery_attempted = true;
